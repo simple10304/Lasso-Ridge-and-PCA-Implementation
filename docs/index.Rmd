@@ -1,0 +1,237 @@
+---
+title: "DA_hw05"
+author: "Lin,Pei Chen"
+date: "2023-03-29"
+output: html_document
+---
+
+Q1.
+
+a.
+```{r}
+library(png)
+library(glmnet)
+path <- "C:/Users/simpl/OneDrive/桌面/111_下學期/資料分析方法/HW02/ORL Faces/ORL Faces"
+
+data <- data.frame(matrix(nrow = 0, ncol = 2576),row.names = character())
+
+for (i in 1:40) {
+  for(j in 1:10){
+    file <- file.path(path, paste0( i,"_",j,".png"))
+    img <- readPNG(file)
+    vec <- as.vector(img)
+    data <- rbind(data, vec)
+  }
+}
+gender<-c(rep(0,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(0,10),rep(1,10),rep(0,10),
+          rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),
+          rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),
+          rep(1,10),rep(0,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10),rep(1,10))
+names(data) <- paste0("Pixel", 1:2576)
+
+
+data<-as.matrix(data)
+gender<-as.matrix(gender)
+cv_model <- cv.glmnet(data,gender,alpha=1)
+best_lambda <- cv_model$lambda.min
+plot(cv_model)
+lasso_model <- glmnet(data,gender,alpha = 1,lambda = best_lambda)
+coef<-coef(lasso_model)
+```
+
+```{r}
+coef(lasso_model)
+ridge_model <- glmnet(data,gender,alpha = 0,lambda = best_lambda)
+coef(ridge_model)
+
+```
+We can see that the lasso model sets many variable coefficients to zero, which means that many variables are deleted, and only the variables that have strong explanatory power for the predictive variable are retained.
+
+In contrast to the lasso model, the ridge model shrinks the coefficients of all variables towards zero, including those with weaker explanatory power for the predictive variable, but none of them are completely eliminated. Therefore, all variables still contribute to the prediction to some extent, but those with stronger explanatory power have larger coefficients than those with weaker explanatory power.
+
+Compare to the results of stepwise regression, I think the ridge model is more similar to the stepwise regression model that retains most of the variables. However, while the stepwise regression model selects variables based on their statistical significance, the ridge model shrinks the coefficients of all variables, including those with weaker explanatory power, towards zero, but none of them are completely eliminated. Therefore, the ridge model may provide a more stable and robust solution by avoiding overfitting and reducing the impact of multicollinearity, but at the expense of some loss of interpretability compared to the stepwise regression model."
+
+b.
+```{r}
+chosen_pixels<-c()
+for (i in 1:nrow(coef)){
+  if (coef[i, ] != 0){
+    x<-coef[i,]
+    chosen_pixels<-rbind(chosen_pixels,x)
+  }
+}
+chosen_pixels <- chosen_pixels[-1]
+chosen_pixels[is.na(chosen_pixels)] <- 0
+chosen_pixels_array <- array(chosen_pixels, dim = c(46, 56))
+image(1:56, 1:46, t(chosen_pixels_array), col = gray(seq(0, 1, length = 256)), xlab = "Pixel", ylab = "Pixel")
+```
+
+Q2.
+a.
+```{r}
+data <- data.frame(
+  year = c(72:86),
+  capital = c(1209188, 1330372, 1157371, 1070860, 1233475, 1355769, 1351667, 1326248, 1089545, 1111942, 988165, 1069651, 1191677, 1246536, 1281262),
+  labor = c(1259142, 1371795, 1263084, 1118226, 1274345, 1369877, 1451595, 1328683, 1077207, 1056231, 947502, 1057159, 1169442, 1195255, 1171664),
+  value_added = c(11150.0, 12853.6, 10450.8, 9318.3, 12097.7, 12844.8, 13309.9, 13402.3, 8571.0, 8739.7, 8140.0, 10958.4, 10838.9, 10030.5, 10836.5)
+)
+
+model <- lm(log(value_added) ~ log(capital) + log(labor), data = data)
+summary(model)
+cat("beta1=",coef(model)[2])
+cat("beta2=",coef(model)[3])
+```
+
+b.
+
+![](C:/Users/simpl/OneDrive/桌面/111_下學期/資料分析方法/HW05/S__5283850.jpg)
+
+We can use the above equation to estimate beta1 and beta2 with OLS under the constraint beta1+beta2=1.
+```{r}
+data_log <- log(data)
+model<-lm((data_log$value_added- data_log$labor)~(data_log$capital-data_log$labor))
+summary(model)
+beta1<-coef(model)[2]
+beta2<-1-beta1
+cat("beta1=",beta1)
+cat("beta2=",beta2)
+```
+
+Q3.
+
+a.
+```{r}
+PCA <- function(x,isCorrMX=FALSE){
+  x<-as.matrix(x)
+  n<-nrow(x)
+  means<-colMeans(x[1:nrow(x),1:ncol(x)])
+  mean<-c()
+  for(i in 1:ncol(x)){
+    mean<-cbind(mean,rep(means[i],nrow(x)))
+  }
+  A<-as.matrix(x-mean)
+  cov<-t(A)%*%A/(n-1)
+  sigma<-c()
+  for(i in 1:ncol(x)){
+    sigma<-cbind(sigma,rep(sqrt(diag(cov)[i]),nrow(x)))
+  }
+  y<-A/sigma
+  corr<-t(y)%*%y/(n-1)
+  if(isCorrMX==FALSE){
+    eigen<-eigen(cov)
+  }
+  else{
+    eigen<-eigen(corr)
+  }
+  lambda<-eigen$values
+  P<-eigen$vectors
+  T<-x%*%P
+  total_variance<-data.frame(PCA=character(),variance=numeric(),contribution=numeric(),cumulative=numeric())
+  cum<-0
+  colnames<-c()
+  for(i in 1:ncol(x)){
+    pc<-lambda[i]/sum(lambda)
+    PCA_name <- paste("PC", i, sep = "")
+    cum<-cum+pc
+    total_variance[i,]<-c(PCA_name,lambda[i],pc,cum)
+    colnames<-cbind(colnames,PCA_name)
+  }
+  total_variance[, c("variance", "contribution", "cumulative")] <- sapply(total_variance[, c("variance", "contribution", "cumulative")], as.numeric)
+  colnames(P)<-c(colnames)
+  rownames(P)<-colnames(x)
+  n_labels<-length(colnames)
+  if(n_labels<=10){
+    limit_labels <-colnames
+  }else{
+    limit_labels<-colnames[1:10]
+  }
+  library(ggplot2)
+  plot<-ggplot(total_variance, aes(x = PCA)) +
+        geom_col(aes(y = variance/max(total_variance[["variance"]])), fill = "steelblue") + 
+        geom_line(aes(y = cumulative,group = 1), color = "indianred3",size=0.6)+
+        geom_point(aes(y=cumulative,group = 1),size=3,shape=21,fill="indianred3") +
+        scale_y_continuous(
+          breaks = seq(0, 1, 0.1),
+          labels = paste0(seq(0, 100, 10), "%"),
+          name = "Cumulative Percentage",
+          sec.axis = sec_axis(~.*max(total_variance[["variance"]]) , name = "Variance")
+        ) +
+        labs(x = "Principal Component") +
+        scale_x_discrete(limits=limit_labels)+
+        theme_bw()
+  return(list(loadingMatrix=P,eigenvalue=lambda,score_matrix=T,scree_plot=plot,total_variance=total_variance))
+}
+```
+
+b.
+
+```{r}
+setwd("C:/Users/simpl/OneDrive/桌面/111_下學期/資料分析方法/HW03")
+data <- read.table("auto-mpg.data.txt",header = FALSE,sep = "")
+str(data)
+colnames(data) <- c("mpg","cylinders","displacement","horsepower","weight","acceleration","model_year","origin","car name")
+
+data_withoutcarname<-subset(data,select=c(1:(ncol(data)-1)))
+data_withoutcarname$horsepower <- as.numeric(data_withoutcarname$horsepower)
+
+x<-na.omit(data_withoutcarname)
+results_corr<-PCA(x,isCorrMX = TRUE)
+results_cov<-PCA(x,isCorrMX = FALSE)
+results_corr
+results_cov$scree_plot
+```
+
+No, as we can see from the scree plot there are two different principal components and that's why we need to choose the "isCorrMx". In some cases, it may be necessary to standardize the variables to ensure that they are all on the same scale and have equal weighting in the analysis.
+
+Q4.
+a.
+```{r}
+library(png)
+library(dplyr)
+library(scales)
+library(reshape2)
+path <- "C:/Users/simpl/OneDrive/桌面/111_下學期/資料分析方法/HW02/ORL Faces/ORL Faces"
+
+data <- data.frame(matrix(nrow = 0, ncol = 2576),row.names = character())
+
+for (i in 1:40) {
+  for(j in 1:10){
+    file <- file.path(path, paste0( i,"_",j,".png"))
+    img <- readPNG(file)
+    vec <- as.vector(img)
+    data <- rbind(data, vec)
+  }
+}
+names(data) <- paste0("Pixel", 1:2576)
+results<-PCA(data,isCorrMX = TRUE)
+
+component_count<-data.frame(tv=c("50%","60%","70%","80%","90%"),
+                            count=0)
+j<-1
+z<-0.5
+cumulative<-results$total_variance[,4]
+for(i in 1:nrow(results$total_variance)){
+  if(cumulative[i]>=z){
+    component_count[j,2]<-i
+    j<- j+1
+    z<-z+0.1
+  }
+  if(j==6){
+    break
+  }
+}
+component_count
+```
+
+b.
+```{r}
+firstPC<-results$loadingMatrix[,1]
+pc1_rescaled<-rescale(firstPC,to=c(0,255))
+pc1_matrix<-matrix(pc1_rescaled,nrow = 46,ncol=56)
+df<-melt(pc1_matrix)
+ggplot(df, aes(Var1, Var2)) +
+  geom_raster(aes(fill=value))+
+  scale_fill_gradient(low = "white", high = "black") +
+  theme_void()
+```
+
